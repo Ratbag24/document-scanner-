@@ -130,12 +130,25 @@ other.
 ## Testing
 
 ```bash
-pytest                              # 155 tests, no network or clamd needed
+pytest                              # 157 tests, no network or clamd needed
 netscan selftest                    # end-to-end against 12 synthetic samples
 ruff check .
 ```
 
-The test suite deliberately avoids requiring clamd, so it runs anywhere; the
-`selftest` command is what proves a real deployment works, and it reports which
-detectors were actually exercised. The ICAP tests run a real server on a real
-socket, because protocol bugs do not show up in unit tests of the parser.
+```bash
+NETSCAN_INTEGRATION=1 pytest tests/test_squid_integration.py   # needs squid
+```
+
+The default suite deliberately avoids requiring clamd or a proxy, so it runs
+anywhere; `selftest` is what proves a real deployment works, and it reports which
+detectors were actually exercised.
+
+The ICAP unit tests drive a real server over a real socket, but they use a client
+we wrote — which proves the parser agrees with *our* reading of RFC 3507, not
+that it agrees with Squid. `test_squid_integration.py` closes that gap by putting
+a real Squid in front of a real origin server and downloading real files through
+it. That distinction is not academic: the first run of that test appeared to show
+nothing being blocked, because `no_proxy` listed `127.0.0.1` and the HTTP client
+silently bypassed the proxy entirely. The test now uses raw sockets with an
+absolute-URI request, and asserts the scanner's counter actually moved, so it
+cannot pass while testing nothing.

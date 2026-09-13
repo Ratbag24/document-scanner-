@@ -163,6 +163,40 @@ jq -r '.findings[].rule' scan.jsonl | sort | uniq -c | sort -rn
 A scanner you trust more than it deserves is worse than no scanner, so those
 limits are in the docs rather than the footnotes.
 
+## Verification status
+
+What has actually been run, versus what has only been written:
+
+**Verified end to end**
+
+- **Inline blocking through a real proxy.** Squid 6.14 in front of a real origin
+  server: malicious downloads returned `403` with the block page, clean ones
+  returned `200` byte-identical, and Squid's own log recorded `TCP_MISS/403`.
+  Scans took 1–9ms. Reproduce with
+  `NETSCAN_INTEGRATION=1 pytest tests/test_squid_integration.py`.
+- **The clamd path**, against a live clamd 1.5.3 over its INSTREAM protocol,
+  including detection inside nested archives.
+- **The engine, structural detector and unpacker** — 157 unit tests.
+- **The passive watcher**, against a simulated Zeek extraction directory and a
+  real `files.log`: correct verdicts, host attribution, quarantine at 0600 with
+  a sidecar verdict, clean files deleted.
+
+**Not verified here — treat as untested**
+
+- **`deploy/zeek/netscan-extract.zeek` has never been run by Zeek.** Zeek was not
+  installable in the environment this was built in. The script follows the
+  documented API and one real bug was found by review (`FileExtract::prefix` is
+  `const &redef` and cannot be assigned in an event handler), but **validate it
+  against a pcap before relying on it**:
+  `zeek -C -r some.pcap deploy/zeek/netscan-extract.zeek && ls extract_files/`
+- **Real ClamAV signature coverage.** `freshclam` was blocked by the build
+  environment's network policy, so clamd was exercised with a minimal custom
+  test database. The protocol integration is proven; the breadth of the official
+  signature set is not.
+- **The Docker and compose files** — no Docker daemon was available.
+- **TLS interception.** The commented block in `deploy/squid.conf` is written
+  from the documentation, not from a working deployment.
+
 ## Docs
 
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — network placement, TLS trade-off,
@@ -175,7 +209,11 @@ limits are in the docs rather than the footnotes.
 
 ```bash
 pip install -e '.[dev]'
-pytest          # 155 tests; no network or clamd required
+pytest          # 157 tests; no network, proxy or clamd needed
 ruff check .
 netscan selftest
+
+# End-to-end against a real Squid proxy (needs squid installed).
+# Skipped by default because it binds ports and needs writable squid dirs.
+NETSCAN_INTEGRATION=1 pytest tests/test_squid_integration.py -v
 ```

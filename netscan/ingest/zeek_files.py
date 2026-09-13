@@ -138,14 +138,17 @@ def _clean(value) -> str:
 def parse_extract_name(name: str) -> tuple[str, str]:
     """Pull (source, fuid) out of a Zeek extracted-file name.
 
-    Zeek's default is `extract-<ts>-<source>-<fuid>`, e.g.
-    `extract-1699999999.123456-HTTP-FabcDEF123`. Returns empty strings for names
-    that do not follow it.
+    Accepts both the name our own Zeek script writes, `extract-<source>-<fuid>`
+    (the file UID is already unique, so no timestamp is needed), and the
+    timestamped `extract-<ts>-<source>-<fuid>` that other extraction scripts and
+    older Zeek defaults produce. Returns empty strings for anything else -- the
+    fuid is only used to enrich the alert, so an unparseable name degrades to a
+    scan without attribution rather than an error.
     """
     if not name.startswith("extract-"):
         return "", ""
-    parts = name[len("extract-"):].split("-")
-    if len(parts) < 3:
+    parts = [p for p in name[len("extract-"):].split("-") if p]
+    if len(parts) < 2:
         return "", ""
     return parts[-2], parts[-1]
 

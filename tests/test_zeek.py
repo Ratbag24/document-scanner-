@@ -18,6 +18,10 @@ FILES_LOG_TSV = """#separator \\x09
 
 class TestParseExtractName:
     @pytest.mark.parametrize("name,expected", [
+        # The name deploy/zeek/netscan-extract.zeek writes.
+        ("extract-HTTP-FQ3rKF1tRJ5XnHhLSc", ("HTTP", "FQ3rKF1tRJ5XnHhLSc")),
+        ("extract-FTP_DATA-Fxyz", ("FTP_DATA", "Fxyz")),
+        # Timestamped names from other extraction scripts.
         ("extract-1699999999.123456-HTTP-FabcDEF123", ("HTTP", "FabcDEF123")),
         ("extract-1.2-FTP_DATA-Fxyz", ("FTP_DATA", "Fxyz")),
         ("extract-1.2-SMTP-Fq", ("SMTP", "Fq")),
