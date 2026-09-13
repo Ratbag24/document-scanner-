@@ -1,0 +1,69 @@
+# netscan, passive deployment (the recommended default).
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#
+# This runs clamd plus the netscan watcher. Zeek runs on the HOST, not in a
+# container, because it needs the host's network interface in promiscuous mode
+# and sharing that into a container buys nothing but complication.
+#
+# The inline (blocking) variant is in docker-compose.inline.yml.
+
+services:
+  clamd:
+    image: clamav/clamav:latest
+    container_name: netscan-clamd
+    restart: unless-stopped
+    volumes:
+      # Persist signatures so a restart does not re-download ~250MB.
+      - clamav-db:/var/lib/clamav
+    environment:
+      # freshclam updates signatures inside the container, every 6 hours.
+      - CLAMAV_NO_FRESHCLAMD=false
+      - FRESHCLAM_CHECKS=4
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --ping 1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      # clamd needs several minutes on first start to load the database.
+      start_period: 300s
+      retries: 5
+    # Signature loading is memory-hungry; below ~2GB clamd fails to start.
+    mem_limit: 3g
+
+  watcher:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: netscan-watcher
+    restart: unless-stopped
+    depends_on:
+      clamd:
+        condition: service_healthy
+    command: >
+      --log /var/log/netscan/scan.jsonl
+      watch
+      --files-log /var/log/zeek/current/files.log
+      --quarantine /var/lib/netscan/quarantine
+    environment:
+      - NETSCAN_CLAMD_HOST=clamd
+      - NETSCAN_CLAMD_PORT=3310
+      - NETSCAN_YARA_RULES=/opt/netscan/rules
+      - NETSCAN_ZEEK_EXTRACT_DIR=/var/log/zeek/extract_files
+    volumes:
+      # Zeek's output, written on the host. Read-write: the watcher deletes
+      # clean files so the disk does not fill.
+      - /var/log/zeek:/var/log/zeek
+      - ../rules:/opt/netscan/rules:ro
+      - netscan-quarantine:/var/lib/netscan/quarantine
+      - netscan-logs:/var/log/netscan
+    # Quarantined files are, by definition, malware sitting on disk. Drop every
+    # capability the scanner does not need.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  clamav-db:
+  netscan-quarantine:
+  netscan-logs:

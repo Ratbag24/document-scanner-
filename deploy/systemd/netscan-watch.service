@@ -1,0 +1,44 @@
+# Passive watcher. Install to /etc/systemd/system/ and:
+#   systemctl enable --now netscan-watch
+[Unit]
+Description=netscan passive file scanner (watches Zeek extractions)
+After=network-online.target clamav-daemon.service zeek.service
+Wants=clamav-daemon.service
+
+[Service]
+Type=simple
+User=netscan
+Group=netscan
+SupplementaryGroups=zeek
+Environment=NETSCAN_YARA_RULES=/opt/netscan/rules
+ExecStart=/opt/netscan/.venv/bin/python -m netscan.cli \
+    --config /etc/netscan/netscan.toml \
+    --log /var/log/netscan/scan.jsonl \
+    --quiet \
+    watch \
+    --files-log /opt/zeek/logs/current/files.log \
+    --quarantine /var/lib/netscan/quarantine
+Restart=always
+RestartSec=5
+
+# This process parses attacker-controlled input continuously. Lock it down.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+ReadWritePaths=/var/log/netscan /var/lib/netscan /opt/zeek/logs
+MemoryMax=2G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

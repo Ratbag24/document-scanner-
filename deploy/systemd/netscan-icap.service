@@ -1,0 +1,42 @@
+# Inline ICAP service. Install to /etc/systemd/system/ and:
+#   systemctl enable --now netscan-icap
+[Unit]
+Description=netscan ICAP scanning service (inline, can block)
+After=network-online.target clamav-daemon.service
+Wants=clamav-daemon.service
+
+[Service]
+Type=simple
+User=netscan
+Group=netscan
+
+Environment=NETSCAN_YARA_RULES=/opt/netscan/rules
+ExecStart=/opt/netscan/.venv/bin/python -m netscan.cli \
+    --config /etc/netscan/netscan.toml \
+    --log /var/log/netscan/scan.jsonl \
+    --quiet \
+    icap
+Restart=always
+RestartSec=5
+
+# This process parses attacker-controlled input continuously. Lock it down.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+ReadWritePaths=/var/log/netscan /var/lib/netscan
+MemoryMax=2G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

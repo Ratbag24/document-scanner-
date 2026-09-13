@@ -1,0 +1,58 @@
+# netscan configuration. Copy to /etc/netscan/netscan.toml and edit.
+# Every value here is the default, so an empty file behaves identically.
+# NETSCAN_* environment variables override anything set here.
+
+[clamav]
+enabled = true
+host = "127.0.0.1"
+port = 3310
+# Prefer a Unix socket when clamd runs on the same host -- it is faster and
+# cannot be reached from the network. Setting this ignores host/port.
+# socket = "/var/run/clamav/clamd.ctl"
+
+[yara]
+# Directory of .yar/.yara files. All are compiled into one ruleset at startup.
+# Leave unset to run without YARA.
+rules_dir = "/opt/netscan/rules"
+
+[hashes]
+# Plain text, one SHA-256 per line, optionally "<hash>  <label>".
+# Any threat-intel feed that exports SHA-256 lists works unmodified.
+blocklists = []
+# Hashes here are recorded but never raise a verdict -- use for software your
+# own tooling produces that would otherwise look suspicious.
+allowlists = []
+
+[scan]
+# Look inside archives and Office documents. The whole point of the scanner;
+# turn off only for troubleshooting.
+unpack_containers = true
+# How many nested containers deep to go. A zip in a zip in a zip is depth 3.
+max_depth = 4
+# Files larger than this are hashed and logged but not content-scanned.
+max_scan_bytes = 104857600  # 100 MB
+# Treat "could not inspect" (encrypted archive, unsupported format) as
+# suspicious. Noisy on a home network, where password-protected zips are
+# usually just password-protected zips.
+unknown_is_suspicious = false
+
+[ingest]
+# Passive path: where the Zeek script writes carved files. Must match
+# NetscanExtract::extract_prefix in deploy/zeek/netscan-extract.zeek.
+zeek_extract_dir = "/var/log/zeek/extract_files"
+# Flagged files are moved here, renamed, and made non-executable.
+quarantine_dir = "/var/lib/netscan/quarantine"
+# One JSON object per line. Point your log collector at this.
+log_file = "/var/log/netscan/scan.jsonl"
+
+[icap]
+# Inline path: the service your proxy calls into.
+host = "0.0.0.0"
+port = 1344
+# Lowest verdict that blocks a download: "malicious" or "suspicious".
+#
+# Start at "malicious". "suspicious" blocks macro-bearing documents and
+# password-protected archives, which on most networks means blocking things
+# people legitimately need. Run at "malicious", read the log for a week, then
+# decide whether the extra coverage is worth the support burden.
+block_at = "malicious"

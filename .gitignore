@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Tooling
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Runtime output. Quarantined files are live malware -- never commit them.
+*.jsonl
+*.quarantined
+*.quarantined.json
+quarantine/
+extract_files/
+
+# Local config may contain internal hostnames and paths.
+netscan.toml

@@ -1,0 +1,70 @@
+# netscan, inline deployment: Squid + ICAP, which CAN block a download.
+#
+#   docker compose -f deploy/docker-compose.inline.yml up -d
+#
+# Before using this, read docs/DEPLOYMENT.md. Two things will bite you:
+#   1. Without TLS interception this scans only plain HTTP -- a few percent of
+#      real traffic. With it, you must install your CA on every device and some
+#      apps will break.
+#   2. The proxy holds each response until netscan answers, so large downloads
+#      stall until fully buffered.
+
+services:
+  clamd:
+    image: clamav/clamav:latest
+    container_name: netscan-clamd
+    restart: unless-stopped
+    volumes:
+      - clamav-db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdscan --ping 1 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      start_period: 300s
+      retries: 5
+    mem_limit: 3g
+
+  icap:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: netscan-icap
+    restart: unless-stopped
+    depends_on:
+      clamd:
+        condition: service_healthy
+    command: >
+      --log /var/log/netscan/scan.jsonl
+      icap --host 0.0.0.0 --port 1344
+    environment:
+      - NETSCAN_CLAMD_HOST=clamd
+      - NETSCAN_CLAMD_PORT=3310
+      - NETSCAN_YARA_RULES=/opt/netscan/rules
+      # Blocking at 'suspicious' will stop legitimate downloads. Start at
+      # 'malicious', watch the log for a week, then decide.
+      - NETSCAN_BLOCK_AT=malicious
+    volumes:
+      - ../rules:/opt/netscan/rules:ro
+      - netscan-logs:/var/log/netscan
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  squid:
+    image: ubuntu/squid:latest
+    container_name: netscan-squid
+    restart: unless-stopped
+    depends_on:
+      - icap
+    ports:
+      - "3128:3128"
+      - "3129:3129"
+    volumes:
+      - ./squid.conf:/etc/squid/squid.conf:ro
+      - squid-cache:/var/spool/squid
+
+volumes:
+  clamav-db:
+  netscan-logs:
+  squid-cache:
